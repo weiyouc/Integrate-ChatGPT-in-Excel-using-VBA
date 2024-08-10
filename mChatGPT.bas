@@ -16,13 +16,16 @@ Option Explicit
 
 '=====================================================
 ' GET YOUR API KEY: https://openai.com/api/
-Const API_KEY As String = "<API_KEY>"
+Const API_KEY As String = "fastgpt-lRtTDjmcei2qynIbrACZQElr6Rjk0ZHMLQc4LDmZq7g6w1jNt7azBh8r923ULz"
 '=====================================================
 
 ' Constants for API endpoint and request properties
-Const API_ENDPOINT As String = "https://api.openai.com/v1/completions"
-Const MODEL As String = "text-davinci-003"
-Const MAX_TOKENS As String = "1024"
+Const API_ENDPOINT As String = "http://host.docker.internal:3000/api/v1/chat/completions"
+
+' http://localhost:3000/api
+
+Const MODEL As String = "qwen2:7b"
+Const MAX_TOKENS As String = "4096"
 Const TEMPERATURE As String = "0.5"
 
 'Output worksheet name
@@ -38,12 +41,12 @@ Sub OpenAI_Completion()
     #End If
 
 30        On Error GoTo ErrorHandler
-40        Application.screenupdating = False
+40        Application.ScreenUpdating = False
 
           ' Check if API key is available
 50        If API_KEY = "<API_KEY>" Then
 60            MsgBox "Please input a valid API key. You can get one from https://openai.com/api/", vbCritical, "No API Key Found"
-70            Application.screenupdating = True
+70            Application.ScreenUpdating = True
 80            Exit Sub
 90        End If
 
@@ -63,13 +66,13 @@ Sub OpenAI_Completion()
 150           prompt = CleanJSONString(prompt)
 160       Else
 170           MsgBox "Please enter some text in the selected cell before executing the macro", vbCritical, "Empty Input"
-180           Application.screenupdating = True
+180           Application.ScreenUpdating = True
 190           Exit Sub
 200       End If
 
           ' Create worksheet if it does not exist
 210       If Not WorksheetExists(OUTPUT_WORKSHEET) Then
-220           Worksheets.Add(After:=Sheets(Sheets.Count)).name = OUTPUT_WORKSHEET
+220           Worksheets.Add(After:=Sheets(Sheets.Count)).Name = OUTPUT_WORKSHEET
 230       End If
 
           ' Clear existing data in worksheet
@@ -84,16 +87,17 @@ Sub OpenAI_Completion()
 
           ' Define request body
           Dim requestBody As String
-270       requestBody = "{" & _
+270       requestBody = "{""messages"": [{" & _
+              """role"": ""user""," & _
+              """content"": """ & prompt & """" & _
+              "}]," & _
               """model"": """ & MODEL & """," & _
-              """prompt"": """ & prompt & """," & _
-              """max_tokens"": " & MAX_TOKENS & "," & _
-              """temperature"": " & TEMPERATURE & _
+              """temperature"": 0.5" & _
               "}"
               
           ' Open and send the HTTP request
 280       With httpRequest
-290           .Open "POST", API_ENDPOINT, False
+290           .Open "POST", "http://localhost:3000/api/v1/chat/completions", False
 300           .SetRequestHeader "Content-Type", "application/json"
 310           .SetRequestHeader "Authorization", "Bearer " & API_KEY
 320           .send (requestBody)
@@ -123,7 +127,7 @@ Sub OpenAI_Completion()
 410           Worksheets(OUTPUT_WORKSHEET).Columns.AutoFit
               
               ' Show completion message
-420           MsgBox "OpenAI completion request processed successfully. Results can be found in the 'Result' worksheet.", vbInformation, "OpenAI Request Completed"
+420           MsgBox "Your local AI completion request processed successfully. Results can be found in the 'Result' worksheet.", vbInformation, "OpenAI Request Completed"
               
               'Activate & color result worksheet
 430           With Worksheets(OUTPUT_WORKSHEET)
@@ -137,32 +141,43 @@ Sub OpenAI_Completion()
 500       End If
           
 510       Application.StatusBar = False
-520       Application.screenupdating = True
+520       Application.ScreenUpdating = True
           
 530       Exit Sub
           
 ErrorHandler:
 540       MsgBox "Error " & Err.Number & ": " & Err.Description & vbCrLf & "Line: " & Erl, vbCritical, "Error"
 550       Application.StatusBar = False
-560       Application.screenupdating = True
+560       Application.ScreenUpdating = True
           
 End Sub
+
 ' Helper function to check if worksheet exists
 Function WorksheetExists(worksheetName As String) As Boolean
 570       On Error Resume Next
 580       WorksheetExists = (Not (Sheets(worksheetName) Is Nothing))
 590       On Error GoTo 0
 End Function
+
 ' Helper function to parse the reponse text
 Function ParseResponse(ByVal response As String) As String
-600       On Error Resume Next
-          Dim startIndex As Long
-610       startIndex = InStr(response, """text"":""") + 8
-          Dim endIndex As Long
-620       endIndex = InStr(response, """index"":") - 2
-630       ParseResponse = Mid(response, startIndex, endIndex - startIndex)
+600     Dim contentStart As Long
+        Dim contentEnd As Long
+
+' Locate the start position of the content field
+610     contentStart = InStr(response, """content"":""") + Len("""content"":""")
+
+' Locate the end position of the content field (next closing quote after content)
+620     contentEnd = InStr(contentStart, response, """") - 1
+
+' Extract the content field value
+630     If contentStart > 0 And contentEnd > contentStart Then
+            ParseResponse = Mid(response, contentStart, contentEnd - contentStart)
+        End If
+
 640       On Error GoTo 0
 End Function
+
 ' Helper function to clean text
 Function CleanJSONString(inputStr As String) As String
 650       On Error Resume Next
